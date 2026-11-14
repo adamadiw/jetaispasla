@@ -393,6 +393,7 @@
   }
 
   function ajouterFichiers(liste) {
+    if (etat.publicationEnCours) return; // glisser-déposer pendant l'envoi : ignoré
     const refuses = [];
     for (const fichier of liste) {
       if (etat.fichiers.length >= MAX_FICHIERS) { refuses.push(`${fichier.name} : maximum ${MAX_FICHIERS} fichiers par note`); continue; }
@@ -540,7 +541,7 @@
       for (const p of item.pages || []) {
         let mots = Array.isArray(p.mots) ? p.mots : [];
         if (JSON.stringify(mots).length > MAX_OCTETS_MOTS) mots = []; // garde-fou de taille
-        lignes.push({ fichier, page: p.page, texte: String(p.texte || '').slice(0, MAX_TEXTE_PAGE), mots });
+        lignes.push({ fichier, page: p.page, texte: JPL.sansNul(String(p.texte || '')).slice(0, MAX_TEXTE_PAGE), mots: JPL.sansNul(mots) });
       }
     });
     return lignes;
@@ -561,17 +562,22 @@
     }
 
     const bouton = $('#bouton-publier');
+    const etapeFichiers = form.querySelector('fieldset.etape');
     etat.publicationEnCours = true;
     bouton.disabled = true;
+    etapeFichiers.disabled = true; // la liste de fichiers ne bouge plus pendant l'envoi
+    // Instantané : fichiers envoyés et pages enregistrées viennent de la même liste,
+    // dans le même ordre (sinon les pages pointeraient vers le mauvais fichier).
+    const items = etat.fichiers.slice();
     try {
       // Attendre la fin des lectures en cours pour ne pas perdre de texte.
-      const lectures = etat.fichiers.map((i) => i.lecture).filter(Boolean);
+      const lectures = items.map((i) => i.lecture).filter(Boolean);
       if (lectures.length) {
         bouton.textContent = 'Lecture du texte en cours…';
         await Promise.allSettled(lectures);
       }
       bouton.textContent = 'Préparation des fichiers…';
-      const prets = await Promise.all(etat.fichiers.map((i) => i.preparation));
+      const prets = await Promise.all(items.map((i) => i.preparation));
 
       await api.assurerSession();
       const meta = {
@@ -581,7 +587,7 @@
         cours: form.elements.cours.value.trim(),
         etablissement: form.elements.etablissement.value.trim(),
         description: form.elements.description.value.trim(),
-        texte_contenu: $('#champ-texte').value.trim(),
+        texte_contenu: JPL.sansNul($('#champ-texte').value).trim(),
       };
       const note = await api.publierNote(prets, meta, (i, total) => {
         bouton.textContent = i < total ? `Envoi des fichiers ${i + 1}/${total}…` : 'Enregistrement…';
@@ -589,7 +595,7 @@
       // Texte et mots par page, pour ouvrir un résultat de recherche au bon endroit.
       // Un échec ici ne doit pas annuler la publication : la note reste cherchable.
       try {
-        await api.publierPages(note.id, lignesPages(etat.fichiers));
+        await api.publierPages(note.id, lignesPages(items));
       } catch (err) {
         console.warn('Pages non enregistrées (la localisation des résultats sera indisponible) :', err);
       }
@@ -603,6 +609,7 @@
       afficherErreurPublier(`La note n'a pas été publiée. ${JPL.messageErreur(err)}`);
     } finally {
       etat.publicationEnCours = false;
+      etapeFichiers.disabled = false;
       bouton.disabled = false;
       bouton.textContent = 'Publier la note';
     }

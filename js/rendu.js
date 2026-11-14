@@ -14,8 +14,10 @@
     // Liens : web et courriel seulement (pas de javascript:, data:, etc.).
     // Les images intégrées en data:image restent permises (règle DOMPurify par balise).
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
-    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed', 'svg', 'math'],
-    FORBID_ATTR: ['style'],
+    // Pas de dialog/formulaires ni d'id/class : un auteur ne doit pas pouvoir imiter
+    // l'interface du site (fausse notification, faux écran de connexion).
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed', 'svg', 'math', 'dialog'],
+    FORBID_ATTR: ['style', 'id', 'class'],
   };
 
   const promesses = {};
@@ -44,6 +46,12 @@
       if (noeud.tagName === 'A' && noeud.hasAttribute('href')) {
         noeud.setAttribute('target', '_blank');
         noeud.setAttribute('rel', 'noopener noreferrer');
+      }
+      // Seules les images contenues dans le fichier (data:image) sont affichées :
+      // une image distante permettrait à l'auteur de pister les lecteurs.
+      if (noeud.tagName === 'IMG' && !/^data:image\//i.test(noeud.getAttribute('src') || '')) {
+        noeud.removeAttribute('src');
+        noeud.removeAttribute('srcset');
       }
     });
     purificateur = DOMPurify;

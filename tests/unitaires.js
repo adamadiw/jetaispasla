@@ -53,6 +53,17 @@
   });
   test('surligner', () => { const d = document.createElement('div'); d.textContent = 'Le procès de Socrafe'; egal(R.surligner(d, ['socrate']).textContent, 'Socrafe'); });
   test('surligner : rien trouvé', () => { const d = document.createElement('div'); d.textContent = 'Newton'; egal(R.surligner(d, ['socrate']), null); });
+  // Revue : un auteur ne doit pas pouvoir imiter l'interface du site ni pister les lecteurs.
+  test('revue : id et class retirés', async () => {
+    const p = (await R.htmlSur('<p id="toast" class="toast plein-ecran">x</p>')).querySelector('p');
+    egal([p.hasAttribute('id'), p.hasAttribute('class')], [false, false]);
+  });
+  test('revue : <dialog> retiré', async () => egal((await R.htmlSur('<dialog open><a href="https://ex.org">Connexion</a></dialog>')).querySelector('dialog'), null));
+  test('revue : image distante bloquée', async () => egal((await R.htmlSur('<img src="https://pisteur.example/x.png">')).querySelector('img') === null
+    || !(await R.htmlSur('<img src="https://pisteur.example/x.png">')).querySelector('img').hasAttribute('src'), true));
+  test('revue : caractère nul retiré', () => egal(window.JPL.sansNul('a\u0000b'), 'ab'));
+  test('revue : caractère nul retiré des mots', () => egal(window.JPL.sansNul([[0.1, 0.2, 0.3, 0.4, 'x\u0000y']]), [[0.1, 0.2, 0.3, 0.4, 'xy']]));
+
   test('pas exécuté', async () => { await new Promise((r) => setTimeout(r, 50)); egal(window.pwn, undefined); });
 
   // ------------------------------------------------------------ exécution

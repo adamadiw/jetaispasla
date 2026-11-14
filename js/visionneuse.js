@@ -28,7 +28,8 @@
     const fichiers = note.fichiers || [];
     const etat = { fichier: 0, page: 0, nbPages: 1, jeton: 0 };
     const pdfs = new Map(); // fichier -> Promise<PDFDocumentProxy>
-    let tachePdf = null;
+    const tachesPdf = {}; // une tâche de rendu par usage ('vue', 'plein') : elles ne s'annulent pas entre elles
+    let fichierAffiche = -1; // fichier actuellement à l'écran
     let elementCourant = null; // ce qui est affiché (img, canvas ou document rendu)
 
     // Onglets (seulement s'il y a plusieurs fichiers)
@@ -115,7 +116,8 @@
       const g = genre(fichier);
       etat.nbPages = 1;
       navPages.hidden = true;
-      if (scene.childElementCount === 0 || !scene.querySelector('.vision-cadre canvas')) message('Chargement du document…');
+      // Nouveau fichier : on retire tout de suite l'ancien (sinon il resterait visible sous le nouvel onglet).
+      if (fichierAffiche !== etat.fichier) message('Chargement du document…');
       try {
         if (g === 'image') await afficherImage(url, fichier, jeton);
         else if (g === 'pdf') await afficherPdf(url, jeton);
@@ -126,6 +128,7 @@
         message("Impossible d'afficher ce fichier ici. Utilise « Ouvrir l'original ».");
       }
       if (jeton !== etat.jeton) return;
+      fichierAffiche = elementCourant ? etat.fichier : -1;
       // Plein écran possible seulement quand quelque chose est affiché.
       boutonPleinEcran.disabled = !elementCourant;
       try {
@@ -226,7 +229,7 @@
       return pdfs.get(etat.fichier);
     }
 
-    async function dessinerPagePdf(doc, numero, largeurCss, densite) {
+    async function dessinerPagePdf(doc, numero, largeurCss, densite, usage) {
       const page = await doc.getPage(numero + 1);
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({ scale: (largeurCss / base.width) * densite });
@@ -236,10 +239,11 @@
       const ctx = canvas.getContext('2d');
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      if (tachePdf) tachePdf.cancel();
-      tachePdf = page.render({ canvasContext: ctx, viewport });
-      await tachePdf.promise;
-      tachePdf = null;
+      if (tachesPdf[usage]) tachesPdf[usage].cancel();
+      const tache = page.render({ canvasContext: ctx, viewport });
+      tachesPdf[usage] = tache;
+      await tache.promise;
+      if (tachesPdf[usage] === tache) tachesPdf[usage] = null;
       canvas.dataset.dessine = '1';
       return { canvas, page, viewport };
     }
@@ -257,7 +261,7 @@
       const largeur = Math.max(280, scene.clientWidth);
       let rendu;
       try {
-        rendu = await dessinerPagePdf(doc, etat.page, largeur, Math.min(2, window.devicePixelRatio || 1));
+        rendu = await dessinerPagePdf(doc, etat.page, largeur, Math.min(2, window.devicePixelRatio || 1), 'vue');
       } catch (err) {
         if (err && err.name === 'RenderingCancelledException') return;
         throw err;
@@ -289,17 +293,27 @@
     // ----------------------------------------------------------------
     // Plein écran : la vue courante en grand, avec zoom.
     async function pleinEcran() {
+      try {
+        await ouvrirPleinEcran();
+      } catch (err) {
+        console.error(err);
+        JPL.toast("Plein écran impossible pour ce fichier. Utilise « Ouvrir l'original ».", 'erreur');
+      }
+    }
+
+    async function ouvrirPleinEcran() {
       if (!elementCourant) return;
       const g = genre(fichiers[etat.fichier]);
       const zone = el('div', { class: 'plein-ecran-zone' });
+      const calque = scene.querySelector('.vision-calque');
       let contenu;
       if (g === 'image') {
         contenu = el('div', { class: 'vision-cadre' }, el('img', { src: elementCourant.src, alt: elementCourant.alt }),
-          scene.querySelector('.vision-calque').cloneNode(true));
+          calque ? calque.cloneNode(true) : null);
       } else if (g === 'pdf') {
         const doc = await documentPdf(JPL.api.urlPublique(fichiers[etat.fichier].chemin));
-        const { canvas } = await dessinerPagePdf(doc, etat.page, Math.max(800, scene.clientWidth), 2);
-        contenu = el('div', { class: 'vision-cadre' }, canvas, scene.querySelector('.vision-calque').cloneNode(true));
+        const { canvas } = await dessinerPagePdf(doc, etat.page, Math.max(800, scene.clientWidth), 2, 'plein');
+        contenu = el('div', { class: 'vision-cadre' }, canvas, calque ? calque.cloneNode(true) : null);
       } else {
         contenu = elementCourant.cloneNode(true);
         contenu.classList.add('plein-ecran-document');

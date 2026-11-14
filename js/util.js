@@ -54,6 +54,14 @@
     return node;
   }
 
+  // Retire le caractère nul (U+0000), refusé par Postgres (text/jsonb) ;
+  // pdf.js en renvoie parfois dans le texte des PDF. Chaînes et tableaux imbriqués.
+  function sansNul(valeur) {
+    if (typeof valeur === 'string') return valeur.replace(/\u0000/g, '');
+    if (Array.isArray(valeur)) return valeur.map(sansNul);
+    return valeur;
+  }
+
   function formaterDate(iso) {
     const date = new Date(iso);
     const jours = Math.floor((Date.now() - date.getTime()) / 86400000);
@@ -113,6 +121,7 @@
   JPL.MOTS_VIDES = MOTS_VIDES;
   JPL.normaliser = normaliser;
   JPL.el = el;
+  JPL.sansNul = sansNul;
   JPL.formaterDate = formaterDate;
   JPL.formaterTaille = formaterTaille;
   JPL.debounce = debounce;
