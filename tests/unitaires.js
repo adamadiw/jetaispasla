@@ -61,6 +61,14 @@
   test('revue : <dialog> retiré', async () => egal((await R.htmlSur('<dialog open><a href="https://ex.org">Connexion</a></dialog>')).querySelector('dialog'), null));
   test('revue : image distante bloquée', async () => egal((await R.htmlSur('<img src="https://pisteur.example/x.png">')).querySelector('img') === null
     || !(await R.htmlSur('<img src="https://pisteur.example/x.png">')).querySelector('img').hasAttribute('src'), true));
+  test('revue sécurité : aucune ressource distante (vidéo, audio, picture)', async () => {
+    const f = await R.htmlSur('<video poster="https://p.example/a.png" src="https://p.example/v.mp4"></video>'
+      + '<audio src="https://p.example/a.mp3"></audio><picture><source srcset="https://p.example/b.png"><img src="data:image/png;base64,iVBORw0KGgo="></picture>'
+      + '<p background="https://p.example/c.png">x</p>');
+    const distantes = [...f.querySelectorAll('*')].filter((n) => ['src', 'srcset', 'poster', 'background']
+      .some((a) => n.hasAttribute(a) && !/^data:image\//i.test(n.getAttribute(a))));
+    egal(distantes.map((n) => n.tagName), []);
+  });
   test('revue : caractère nul retiré', () => egal(window.JPL.sansNul('a\u0000b'), 'ab'));
   test('revue : caractère nul retiré des mots', () => egal(window.JPL.sansNul([[0.1, 0.2, 0.3, 0.4, 'x\u0000y']]), [[0.1, 0.2, 0.3, 0.4, 'xy']]));
 

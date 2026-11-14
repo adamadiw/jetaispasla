@@ -16,8 +16,11 @@
     ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
     // Pas de dialog/formulaires ni d'id/class : un auteur ne doit pas pouvoir imiter
     // l'interface du site (fausse notification, faux écran de connexion).
-    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed', 'svg', 'math', 'dialog'],
-    FORBID_ATTR: ['style', 'id', 'class'],
+    // Pas de médias externes (vidéo, audio, picture/source) : ils chargeraient des ressources
+    // distantes et permettraient de pister les lecteurs.
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'textarea', 'select', 'iframe', 'object', 'embed', 'svg', 'math', 'dialog',
+      'video', 'audio', 'source', 'track', 'picture'],
+    FORBID_ATTR: ['style', 'id', 'class', 'srcset', 'poster', 'background'],
   };
 
   const promesses = {};
