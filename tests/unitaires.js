@@ -33,6 +33,28 @@
   [[0.1, 0.1, 0.2, 0.08, 'Socrate']]));
   test('boîtes : entrée vide ou absente', () => egal(window.JPL.ocr.boitesNormalisees(null, 1000, 500), []));
 
+  // ------------------------------------------------------------ rendu sûr
+  const R = new Proxy({}, { get: (_, k) => window.JPL.rendu[k] });
+  test('XSS script', async () => egal((await R.htmlSur('<p>ok</p><script>window.pwn=1</script>')).querySelector('script'), null));
+  test('XSS onerror', async () => egal((await R.htmlSur('<img src=x onerror="window.pwn=1">')).querySelector('img').hasAttribute('onerror'), false));
+  test('lien javascript', async () => egal((await R.htmlSur('<a href="javascript:alert(1)">x</a>')).querySelector('a').hasAttribute('href'), false));
+  test('lien externe', async () => egal((await R.htmlSur('<a href="https://ex.org">x</a>')).querySelector('a').rel, 'noopener noreferrer'));
+  test('lien externe : nouvel onglet', async () => egal((await R.htmlSur('<a href="https://ex.org">x</a>')).querySelector('a').target, '_blank'));
+  test('pas de style ni iframe', async () => {
+    const f = await R.htmlSur('<p style="position:fixed">a</p><iframe src="https://ex.org"></iframe><form><input></form>');
+    egal([f.querySelector('p').hasAttribute('style'), !!f.querySelector('iframe'), !!f.querySelector('form'), !!f.querySelector('input')], [false, false, false, false]);
+  });
+  test('image data: conservée', async () => egal((await R.htmlSur('<img src="data:image/png;base64,iVBORw0KGgo=">')).querySelector('img').getAttribute('src').startsWith('data:image/png'), true));
+  test('markdown', async () => egal((await R.markdown('# Titre\n\n- un')).querySelector('h1').textContent, 'Titre'));
+  test('markdown : HTML brut neutralisé', async () => egal((await R.markdown('<img src=x onerror="window.pwn=1">')).querySelector('img').hasAttribute('onerror'), false));
+  test('docx', async () => {
+    const octets = await (await fetch('../samples/histoire-revolution-tranquille.docx')).arrayBuffer();
+    egal((await R.docx(octets)).textContent.includes('Révolution tranquille'), true);
+  });
+  test('surligner', () => { const d = document.createElement('div'); d.textContent = 'Le procès de Socrafe'; egal(R.surligner(d, ['socrate']).textContent, 'Socrafe'); });
+  test('surligner : rien trouvé', () => { const d = document.createElement('div'); d.textContent = 'Newton'; egal(R.surligner(d, ['socrate']), null); });
+  test('pas exécuté', async () => { await new Promise((r) => setTimeout(r, 50)); egal(window.pwn, undefined); });
+
   // ------------------------------------------------------------ exécution
   window.addEventListener('load', async () => {
     const liste = document.getElementById('resultats');
