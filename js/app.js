@@ -434,7 +434,7 @@
       return el('li', { class: 'fichier' },
         item.famille === 'image'
           ? el('img', { src: item.apercu, alt: '', class: 'fichier-apercu' })
-          : el('span', { class: 'fichier-apercu fiche-format', text: libelleFormat(item.fichier.type || '') }),
+          : el('span', { class: 'fichier-apercu fiche-format', text: { pdf: 'PDF', docx: 'Word', texte: (item.pret && item.pret.extension === 'md') || /\.(md|markdown)$/i.test(item.fichier.name) ? 'MD' : 'TXT' }[item.famille] }),
         el('span', { class: 'fichier-infos' },
           el('span', { class: 'fichier-nom', text: item.fichier.name }),
           el('span', { class: 'fichier-taille', text: JPL.formaterTaille(item.fichier.size) }),

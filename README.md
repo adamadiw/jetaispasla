@@ -1,10 +1,13 @@
 # J'étais pas là
 
-Site de partage de notes de cours pour les étudiants du cégep et de l'université. On publie des photos de ses notes ; le texte est lu automatiquement (OCR) et devient cherchable par tout le monde, depuis n'importe quel appareil.
+Site de partage de notes de cours pour les étudiants du cégep et de l'université. On publie des photos de ses notes ou des documents (PDF, Word, Markdown, texte) ; le texte est lu automatiquement et devient cherchable par tout le monde, depuis n'importe quel appareil.
+
+Site en ligne : <https://jetaispasla.vercel.app>
 
 - **Stack** : HTML, CSS et JavaScript vanilla, sans npm ni étape de compilation.
 - **Données** : Supabase (Postgres + Storage), sécurisé par RLS.
 - **OCR** : Tesseract.js dans le navigateur (français + anglais). Aucun service payant.
+- **Documents** : pdf.js (PDF ; les PDF scannés passent par l'OCR), mammoth.js (.docx), lecture directe (.md, .txt). Notion et Google Docs : exporter en PDF, DOCX ou Markdown.
 - **Recherche** : MiniSearch dans le navigateur (tolère les fautes, les accents et les débuts de mots).
 - **Hébergement** : Vercel (site statique).
 
@@ -56,10 +59,18 @@ js/api.js           Supabase : session anonyme, notes, fichiers, signalements
 js/images.js        Redimensionnement des photos avant OCR et envoi
 js/ocr.js           OCR Tesseract.js (chargé à la demande)
 js/recherche.js     Index de recherche MiniSearch
+js/extraction.js    Texte des documents : PDF (pdf.js, OCR si scanné), DOCX (mammoth), MD, TXT
 js/app.js           Interface et navigation
 supabase/schema.sql Schéma, RLS et Storage
-samples/            Images de test (texte imprimé, écriture manuscrite simulée)
+samples/            Fichiers de test : photos (imprimé, manuscrit simulé), PDF numérique,
+                    PDF scanné, DOCX, Markdown, texte
 ```
+
+## Tester rapidement
+
+1. Publier une note avec `samples/manuscrit-simule.png` : le texte apparaît dans la zone modifiable après quelques secondes.
+2. Dans une fenêtre de navigation privée (autre utilisateur), chercher `socrat`, `sokrate` ou `maieutique` : la note est trouvée et le mot est surligné.
+3. Publier les fichiers `samples/*.pdf`, `.docx`, `.md`, `.txt` puis chercher `telophase`, `lesage`, `inertie`.
 
 ## Limites connues
 
@@ -67,3 +78,5 @@ samples/            Images de test (texte imprimé, écriture manuscrite simulé
 - **Recherche côté navigateur** : toutes les notes (jusqu'à 500) sont chargées puis indexées dans le navigateur. Au-delà d'environ 1 000 à 2 000 notes, il faudra passer à une recherche côté serveur (Postgres `pg_trgm` + `unaccent`).
 - **Identité anonyme** : elle est liée au navigateur. Effacer les données du navigateur fait perdre la possibilité de supprimer ses propres notes.
 - **HEIC** : les photos HEIC ne sont lisibles (aperçu et OCR) que dans Safari ; ailleurs, elles sont envoyées telles quelles, sans OCR.
+- **PDF** : texte des 200 premières pages ; pour un PDF scanné, OCR des 5 premières pages seulement (pour garder un temps d'attente raisonnable).
+- **Première lecture** : la première photo analysée télécharge le dictionnaire français/anglais de Tesseract (quelques Mo, une seule fois par navigateur).
