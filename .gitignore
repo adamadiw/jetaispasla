@@ -12,3 +12,6 @@ desktop.ini
 # Ne jamais committer de secrets
 .env
 .env.*
+
+# Espace de travail des plans (superpowers)
+.superpowers/
