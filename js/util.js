@@ -17,6 +17,13 @@
     autre: 'Autre',
   };
 
+  // Mots trop fréquents pour aider à trouver une note (recherche et localisation).
+  const MOTS_VIDES = new Set([
+    'a', 'au', 'aux', 'c', 'ce', 'ces', 'd', 'de', 'des', 'du', 'en', 'et', 'il', 'j', 'l', 'la', 'le',
+    'les', 'm', 'n', 'ne', 'on', 'ou', 's', 'sa', 'se', 'ses', 'son', 't', 'un', 'une', 'y',
+    'the', 'of', 'and', 'to', 'is', 'in',
+  ]);
+
   // Minuscules + suppression des accents : « Théorème » -> « theoreme ».
   function normaliser(texte) {
     return String(texte || '')
@@ -103,6 +110,7 @@
 
   JPL.MATIERES = MATIERES;
   JPL.TYPES = TYPES;
+  JPL.MOTS_VIDES = MOTS_VIDES;
   JPL.normaliser = normaliser;
   JPL.el = el;
   JPL.formaterDate = formaterDate;

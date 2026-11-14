@@ -4,3 +4,5 @@ README.md
 supabase/
 samples/
 .playwright-mcp/
+tests/
+docs/
