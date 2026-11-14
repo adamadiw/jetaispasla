@@ -375,7 +375,9 @@
           majEtatFichier(item, "Texte non lu : ce navigateur ne peut pas ouvrir cette image (fichier abîmé ou format HEIC). Saisis le texte toi-même.", 'avertissement');
           return;
         }
-        const texte = (await lecteur.lireTexte(item, (msg) => majEtatFichier(item, msg))).trim();
+        const resultat = await lecteur.lireTexte(item, (msg) => majEtatFichier(item, msg));
+        const texte = (resultat.texte || '').trim();
+        item.pages = resultat.pages || [];
         if (!etat.fichiers.includes(item)) return; // retiré entre-temps
         if (texte) {
           ajouterTexte(texte);
@@ -470,6 +472,21 @@
     if (champ) champ.focus();
   }
 
+  // Lignes notes_pages : `fichier` = rang du fichier dans la note (même ordre que l'envoi).
+  const MAX_TEXTE_PAGE = 200000;
+  const MAX_OCTETS_MOTS = 450000;
+  function lignesPages(items) {
+    const lignes = [];
+    items.forEach((item, fichier) => {
+      for (const p of item.pages || []) {
+        let mots = Array.isArray(p.mots) ? p.mots : [];
+        if (JSON.stringify(mots).length > MAX_OCTETS_MOTS) mots = []; // garde-fou de taille
+        lignes.push({ fichier, page: p.page, texte: String(p.texte || '').slice(0, MAX_TEXTE_PAGE), mots });
+      }
+    });
+    return lignes;
+  }
+
   async function publier(evt) {
     evt.preventDefault();
     if (etat.publicationEnCours) return; // évite les doublons
@@ -510,6 +527,13 @@
       const note = await api.publierNote(prets, meta, (i, total) => {
         bouton.textContent = i < total ? `Envoi des fichiers ${i + 1}/${total}…` : 'Enregistrement…';
       });
+      // Texte et mots par page, pour ouvrir un résultat de recherche au bon endroit.
+      // Un échec ici ne doit pas annuler la publication : la note reste cherchable.
+      try {
+        await api.publierPages(note.id, lignesPages(etat.fichiers));
+      } catch (err) {
+        console.warn('Pages non enregistrées (la localisation des résultats sera indisponible) :', err);
+      }
       etat.notes.unshift(note);
       if (JPL.recherche) JPL.recherche.ajouter(note);
       reinitialiserFormulaire();

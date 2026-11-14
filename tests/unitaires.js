@@ -27,6 +27,12 @@
   test('boîtes', () => egal(L.boitesCorrespondantes([[0.1, 0.2, 0.3, 0.05, 'Socrafe'], [0.5, 0.5, 0.1, 0.1, 'et']], ['socrate']), [[0.1, 0.2, 0.3, 0.05]]));
   test('boîtes bornées', () => egal(L.boitesCorrespondantes([[-1, 2, 'x', 0.1, 'socrate'], ['bad']], ['socrate']), [[0, 1, 0, 0.1]]));
 
+  // ------------------------------------------------------------ ocr
+  test('boîtes normalisées', () => egal(window.JPL.ocr.boitesNormalisees([{ paragraphs: [{ lines: [{ words: [
+    { text: 'Socrate', bbox: { x0: 100, y0: 50, x1: 300, y1: 90 } }, { text: ' ', bbox: { x0: 0, y0: 0, x1: 1, y1: 1 } }] }] }] }], 1000, 500),
+  [[0.1, 0.1, 0.2, 0.08, 'Socrate']]));
+  test('boîtes : entrée vide ou absente', () => egal(window.JPL.ocr.boitesNormalisees(null, 1000, 500), []));
+
   // ------------------------------------------------------------ exécution
   window.addEventListener('load', async () => {
     const liste = document.getElementById('resultats');

@@ -53,12 +53,14 @@
         surProgression(`Lecture du PDF… page ${i}/${nbPages}`);
         const page = await doc.getPage(i);
         const contenu = await page.getTextContent();
-        pages.push(contenu.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : ' ')).join(''));
+        const textePage = contenu.items.map((it) => (it.str || '') + (it.hasEOL ? '\n' : ' ')).join('')
+          .replace(/[ \t]+/g, ' ').trim();
+        pages.push({ page: i - 1, texte: textePage, mots: [] });
         page.cleanup();
       }
-      const texte = pages.join('\n\n').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+      const texte = pages.map((p) => p.texte).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
       // Peu ou pas de texte : probablement un PDF scanné -> OCR des pages.
-      if (texte.replace(/\s/g, '').length >= 20 * nbPages || !JPL.ocr) return texte;
+      if (texte.replace(/\s/g, '').length >= 20 * nbPages || !JPL.ocr) return { texte, pages };
       return await ocrPdf(doc, surProgression);
     } finally {
       // Libère le worker pdf.js ; une erreur de nettoyage ne doit pas faire perdre le texte.
@@ -68,7 +70,7 @@
 
   async function ocrPdf(doc, surProgression) {
     const nbPages = Math.min(doc.numPages, MAX_PAGES_OCR);
-    const textes = [];
+    const pages = [];
     for (let i = 1; i <= nbPages; i++) {
       surProgression(`PDF scanné : lecture de la page ${i}/${nbPages}…`);
       const page = await doc.getPage(i);
@@ -83,11 +85,11 @@
       await page.render({ canvasContext: ctx, viewport }).promise;
       page.cleanup();
       const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
-      const texte = await JPL.ocr.lireTexte({ pret: { blob } }, (msg) =>
+      const lu = await JPL.ocr.lireTexte({ pret: { blob } }, (msg) =>
         surProgression(`PDF scanné, page ${i}/${nbPages} : ${msg.charAt(0).toLowerCase()}${msg.slice(1)}`));
-      if (texte) textes.push(texte);
+      pages.push({ page: i - 1, texte: lu.texte, mots: lu.pages[0].mots });
     }
-    return textes.join('\n\n');
+    return { texte: pages.map((p) => p.texte).filter(Boolean).join('\n\n'), pages };
   }
 
   // --------------------------------------------------------------- DOCX
@@ -117,14 +119,17 @@
   }
 
   // ---------------------------------------------------------- Interface
-  // Même interface que JPL.ocr : lireTexte(item, surProgression) -> Promise<string>
+  // Même interface que JPL.ocr :
+  // lireTexte(item, surProgression) -> Promise<{ texte, pages: [{ page, texte, mots }] }>
+  const unePage = (texte) => ({ texte, pages: [{ page: 0, texte, mots: [] }] });
+
   async function lireTexte(item, surProgression) {
     const fichier = item.fichier;
-    if (item.famille === 'texte') return (await fichier.text()).replace(/\r\n/g, '\n');
+    if (item.famille === 'texte') return unePage((await fichier.text()).replace(/\r\n/g, '\n'));
     if (item.famille === 'pdf') return textePdf(fichier, surProgression);
-    if (item.famille === 'docx') return texteDocx(fichier, surProgression);
-    return '';
+    if (item.famille === 'docx') return unePage(await texteDocx(fichier, surProgression));
+    return unePage('');
   }
 
-  JPL.extraction = { FORMATS, preparerDocument, lireTexte };
+  JPL.extraction = { FORMATS, preparerDocument, lireTexte, chargerPdfjs, chargerMammoth };
 })();
