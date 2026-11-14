@@ -29,6 +29,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* L'attribut hidden doit gagner sur les display: flex/grid des composants. */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -453,40 +456,110 @@ abbr[title] { text-decoration: none; color: var(--marge); }
 .detail-meta dd { margin: 0; font-weight: 700; }
 .detail-description { max-width: 65ch; margin: 0 0 1.5rem; white-space: pre-line; }
 
-.galerie {
-  list-style: none;
-  margin: 0 0 2rem;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 0.85rem;
+/* --- Visionneuse : l'original d'abord --------------------------------- */
+.visionneuse {
+  margin: 0 0 1.5rem;
+  background: #fff;
+  border: 1.5px solid var(--ligne);
+  border-top: 4px solid var(--marge);
+  border-radius: 3px;
 }
-.galerie-image, .galerie-document {
+.vision-onglets {
   display: flex;
-  flex-direction: column;
+  overflow-x: auto;
+  background: var(--papier);
+  border-bottom: 1.5px solid var(--ligne);
+}
+.vision-onglet {
+  flex: none;
+  max-width: 15rem;
+  padding: 0.65rem 0.95rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--graphite-doux);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.vision-onglet:hover { color: var(--encre); }
+.vision-onglet[aria-selected='true'] { color: var(--encre); background: #fff; border-bottom-color: var(--marge); }
+
+.vision-bandeau {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  background: #fff6c2;
+  border-bottom: 1px solid var(--ligne);
+  font-weight: 700;
+}
+
+.vision-scene {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 12rem;
+  padding: 0.75rem;
+  background: var(--papier-fonce);
+}
+.vision-scene:focus-visible { outline-offset: -3px; }
+.vision-cadre { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.vision-cadre:has(canvas) { width: 100%; }
+.vision-image { display: block; max-width: 100%; max-height: 80vh; width: auto; height: auto; background: #fff; }
+.vision-pdf { display: block; width: 100%; height: auto; background: #fff; border: 1px solid var(--ligne); }
+.vision-calque { position: absolute; inset: 0; pointer-events: none; }
+.cadre-mot {
+  position: absolute;
+  background: rgba(255, 228, 92, 0.45);
+  outline: 2px solid #d9a400;
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+.vision-message { align-self: center; max-width: 42ch; margin: 2rem 1rem; color: var(--graphite-doux); text-align: center; line-height: 1.55; }
+
+.document-rendu, .document-texte {
   width: 100%;
-  aspect-ratio: 3 / 4;
-  padding: 0;
+  max-width: 72ch;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border: 1px solid var(--ligne);
+  line-height: 1.6;
+}
+.document-texte { white-space: pre-wrap; overflow-wrap: anywhere; }
+.document-rendu img { max-width: 100%; height: auto; }
+.document-rendu h1, .document-rendu h2, .document-rendu h3 { font-family: var(--police-titre); color: var(--encre); line-height: 1.2; }
+.document-rendu table { border-collapse: collapse; margin: 1rem 0; }
+.document-rendu th, .document-rendu td { border: 1px solid var(--ligne-forte); padding: 0.3rem 0.55rem; }
+.document-rendu pre, .document-rendu code { font-family: ui-monospace, Consolas, monospace; font-size: 0.92em; }
+.document-rendu pre { overflow-x: auto; padding: 0.75rem; background: var(--papier-fonce); }
+
+.vision-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--ligne);
+}
+.vision-pages { display: inline-flex; align-items: center; gap: 0.5rem; font-weight: 700; }
+.vision-actions { display: inline-flex; flex-wrap: wrap; gap: 0.5rem; margin-left: auto; }
+
+/* Texte extrait : secondaire, replié */
+.texte-extrait {
+  margin: 0 0 1.5rem;
+  background: #fff;
   border: 1.5px solid var(--ligne);
   border-radius: 3px;
-  background: var(--papier-fonce);
-  overflow: hidden;
-  cursor: zoom-in;
-  color: inherit;
-  text-decoration: none;
 }
-.galerie-image img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
-.galerie-image:hover, .galerie-document:hover { border-color: var(--encre); }
-.galerie-document { cursor: pointer; }
-.galerie-document .fiche-format { flex: 1; height: auto; }
-.galerie-nom { padding: 0.5rem; font-size: 0.88rem; font-weight: 700; overflow-wrap: anywhere; background: #fff; }
+.texte-extrait summary { padding: 0.75rem 1rem; font-weight: 700; color: var(--encre); cursor: pointer; }
+.texte-extrait[open] summary { border-bottom: 1px solid var(--ligne); }
+.texte-extrait > :not(summary) { margin: 0.75rem 1rem; }
+.texte-extrait .texte-cahier { max-height: 50vh; overflow: auto; }
 
-.detail-texte h2 {
-  font-family: var(--police-titre);
-  font-size: 1.4rem;
-  color: var(--encre);
-  margin: 0 0 0.75rem;
-}
 .texte-cahier {
   max-width: 70ch;
   padding: 0.5rem 1rem 0.5rem calc(1rem + 1.5rem);
@@ -520,15 +593,37 @@ dialog h2 { margin: 0 0 1rem; font-family: var(--police-titre); color: var(--enc
 dialog label { display: block; font-weight: 700; margin-bottom: 0.4rem; }
 dialog textarea { margin-bottom: 1rem; }
 
-.visionneuse {
-  width: min(64rem, calc(100vw - 1rem));
-  max-height: calc(100vh - 1rem);
-  padding: 0.75rem;
-  border-top-width: 1.5px;
-  background: #fff;
+/* Plein écran de la visionneuse */
+dialog.plein-ecran {
+  width: calc(100vw - 1rem);
+  max-width: none;
+  height: calc(100vh - 1rem);
+  max-height: none;
+  padding: 0;
+  border-top-width: 4px;
 }
-.visionneuse img { margin: 0 auto; max-height: calc(100vh - 6rem); width: auto; }
-.visionneuse form { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
+dialog.plein-ecran[open] { display: flex; flex-direction: column; }
+.plein-ecran-outils {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--ligne);
+}
+.plein-ecran-zoom { display: inline-flex; gap: 0.4rem; }
+.plein-ecran-zoom [aria-pressed='true'] { background: var(--papier-fonce); border-color: var(--encre); }
+.plein-ecran-zone { flex: 1; overflow: auto; padding: 0.75rem; background: var(--papier-fonce); text-align: center; }
+.plein-ecran-zone .vision-cadre { text-align: left; }
+.plein-ecran-zone[data-zoom='ajuste'] .vision-cadre img,
+.plein-ecran-zone[data-zoom='ajuste'] .vision-cadre canvas { max-width: 100%; max-height: calc(100vh - 6.5rem); width: auto; height: auto; }
+.plein-ecran-zone[data-zoom='ajuste'] .vision-cadre:has(canvas) { width: auto; }
+.plein-ecran-zone:not([data-zoom='ajuste']) .vision-cadre { max-width: none; }
+.plein-ecran-zone:not([data-zoom='ajuste']) .vision-cadre img,
+.plein-ecran-zone:not([data-zoom='ajuste']) .vision-cadre canvas { max-width: none; max-height: none; }
+.plein-ecran-document { max-height: none; margin: 0 auto; text-align: left; }
+.plein-ecran-zone[data-zoom='100'] .plein-ecran-document { font-size: 1.2rem; }
+.plein-ecran-zone[data-zoom='200'] .plein-ecran-document { font-size: 1.6rem; max-width: none; }
 
 .toast {
   position: fixed;

@@ -41,6 +41,11 @@
       if (lien.dataset.nav === route.vue) lien.setAttribute('aria-current', 'page');
       else lien.removeAttribute('aria-current');
     }
+    if (route.vue !== 'note' && detailCourant) {
+      // Quitte la page de détail : libère les PDF ouverts.
+      if (detailCourant.visionneuse) detailCourant.visionneuse.detruire();
+      detailCourant = null;
+    }
     if (route.vue === 'note') afficherDetail(route.id);
     if (route.vue === 'catalogue') {
       document.title = "J'étais pas là — les notes du cours que tu as manqué";
@@ -230,8 +235,49 @@
   // ------------------------------------------------------------------
   // Détail d'une note
   // ------------------------------------------------------------------
+  let detailCourant = null; // { id, visionneuse, actions }
+
+  function boutonsActions(note) {
+    const estAMoi = note.owner_id === api.utilisateurId();
+    return [
+      estAMoi ? el('button', { type: 'button', class: 'bouton bouton-marge', onclick: () => supprimer(note) }, 'Supprimer ma note') : null,
+      !estAMoi ? el('button', { type: 'button', class: 'bouton bouton-discret', onclick: () => ouvrirSignalement(note) }, 'Signaler') : null,
+    ].filter(Boolean);
+  }
+
+  function sectionTexte(note) {
+    const texte = note.texte_contenu || '';
+    const copier = el('button', {
+      type: 'button', class: 'bouton bouton-discret bouton-petit',
+      onclick: async () => {
+        try {
+          await navigator.clipboard.writeText(texte);
+          JPL.toast('Texte copié.');
+        } catch (_) {
+          JPL.toast('Copie impossible : sélectionne le texte et copie-le à la main.', 'erreur');
+        }
+      },
+    }, 'Copier le texte');
+    return el('details', { class: 'texte-extrait' },
+      el('summary', null, 'Texte extrait (pour copier-coller)'),
+      texte
+        ? [el('p', { class: 'aide', text: 'Lu automatiquement dans les fichiers, puis corrigé par l’auteur : il peut rester des erreurs. C’est ce texte qui permet de trouver la note.' }),
+          copier,
+          el('div', { class: 'texte-cahier', text: texte })]
+        : el('p', { class: 'etat', text: "Aucun texte n'a été extrait de cette note." }));
+  }
+
   function afficherDetail(id) {
     const conteneur = $('#detail-note');
+    // Même note déjà affichée (ex. la session vient d'être créée) : on ne met à
+    // jour que les boutons, sans recharger la visionneuse.
+    if (detailCourant && detailCourant.id === id && conteneur.contains(detailCourant.actions)) {
+      const note = etat.notes.find((n) => n.id === id);
+      if (note) detailCourant.actions.replaceChildren(...boutonsActions(note));
+      return;
+    }
+    if (detailCourant) detailCourant.visionneuse && detailCourant.visionneuse.detruire();
+    detailCourant = null;
     conteneur.replaceChildren();
     if (!etat.notesChargees) {
       conteneur.append(el('p', { class: 'etat', text: etat.erreurChargement ? JPL.messageErreur(etat.erreurChargement) : 'Chargement de la note…' }));
@@ -243,7 +289,6 @@
       return;
     }
     document.title = `${note.titre} — J'étais pas là`;
-    const estAMoi = note.owner_id === api.utilisateurId();
 
     const meta = el('dl', { class: 'detail-meta' },
       el('div', null, el('dt', { text: 'Matière' }), el('dd', { text: note.matiere })),
@@ -252,45 +297,21 @@
       el('div', null, el('dt', { text: 'Type' }), el('dd', { text: TYPES[note.type_document] || 'Autre' })),
       el('div', null, el('dt', { text: 'Publiée' }), el('dd', null, el('time', { datetime: note.created_at, text: JPL.formaterDate(note.created_at) }))));
 
-    const galerie = el('ul', { class: 'galerie' }, note.fichiers.map((f, i) => {
-      const url = api.urlPublique(f.chemin);
-      const estImage = f.type.startsWith('image/') && !/hei[cf]/.test(f.type);
-      if (estImage) {
-        return el('li', null, el('button', {
-          type: 'button', class: 'galerie-image',
-          'aria-label': `Agrandir l'image ${i + 1} sur ${note.fichiers.length}`,
-          onclick: () => ouvrirImage(url, `Page ${i + 1} de ${note.titre}`),
-        }, el('img', { src: url, alt: `Page ${i + 1} de ${note.titre}`, loading: 'lazy' })));
-      }
-      return el('li', null, el('a', { class: 'galerie-document', href: url, target: '_blank', rel: 'noopener', download: f.nom },
-        el('span', { class: 'fiche-format', text: libelleFormat(f.type) }),
-        el('span', { class: 'galerie-nom', text: f.nom })));
-    }));
-
-    const actions = el('div', { class: 'detail-actions' },
-      estAMoi ? el('button', { type: 'button', class: 'bouton bouton-marge', onclick: () => supprimer(note) }, 'Supprimer ma note') : null,
-      !estAMoi ? el('button', { type: 'button', class: 'bouton bouton-discret', onclick: () => ouvrirSignalement(note) }, 'Signaler') : null);
+    const zoneVisionneuse = el('div', { class: 'detail-visionneuse' });
+    const actions = el('div', { class: 'detail-actions' }, boutonsActions(note));
 
     // Note : Element.append() écrirait « null » en texte, d'où le filtre.
     conteneur.append(...[
       el('h1', { class: 'titre-page', text: note.titre }),
       meta,
       note.description ? el('p', { class: 'detail-description', text: note.description }) : null,
-      galerie,
-      el('section', { class: 'detail-texte', 'aria-labelledby': 'titre-texte' },
-        el('h2', { id: 'titre-texte', text: 'Texte de la note' }),
-        note.texte_contenu
-          ? el('div', { class: 'texte-cahier', text: note.texte_contenu })
-          : el('p', { class: 'etat', text: "Aucun texte n'a été extrait de cette note." })),
+      zoneVisionneuse,
+      sectionTexte(note),
       actions,
     ].filter(Boolean));
-  }
 
-  function ouvrirImage(url, alt) {
-    const img = $('#image-agrandie');
-    img.src = url;
-    img.alt = alt;
-    $('#dialog-image').showModal();
+    const visionneuse = JPL.visionneuse.creer(zoneVisionneuse, note);
+    detailCourant = { id, visionneuse, actions };
   }
 
   async function supprimer(note) {
@@ -584,7 +605,6 @@
       ajouterFichiers(Array.from(e.dataTransfer.files));
     });
     $('#form-publier').addEventListener('submit', publier);
-    $('#dialog-image').addEventListener('click', (e) => { if (e.target.id === 'dialog-image') e.target.close(); });
 
     window.addEventListener('hashchange', afficherRoute);
     afficherRoute();
