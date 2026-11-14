@@ -8,12 +8,7 @@
     return;
   }
 
-  // Mots trop fréquents pour aider à trouver une note.
-  const MOTS_VIDES = new Set([
-    'a', 'au', 'aux', 'c', 'ce', 'ces', 'd', 'de', 'des', 'du', 'en', 'et', 'il', 'j', 'l', 'la', 'le',
-    'les', 'm', 'n', 'ne', 'on', 'ou', 's', 'sa', 'se', 'ses', 'son', 't', 'un', 'une', 'y',
-    'the', 'of', 'and', 'to', 'is', 'in',
-  ]);
+  const MOTS_VIDES = JPL.MOTS_VIDES;
 
   const CHAMPS = ['titre', 'matiere', 'cours', 'etablissement', 'description', 'texte_contenu'];
 

@@ -95,6 +95,27 @@
     }
   }
 
+  // Texte et position des mots par page (table notes_pages), pour localiser
+  // un résultat de recherche. lignes : [{ fichier, page, texte, mots }]
+  async function publierPages(noteId, lignes) {
+    if (!lignes || !lignes.length) return;
+    const { error } = await client
+      .from('notes_pages')
+      .insert(lignes.map((l) => ({ note_id: noteId, fichier: l.fichier, page: l.page, texte: l.texte || '', mots: l.mots || [] })));
+    if (error) throw error;
+  }
+
+  async function chargerPages(noteId) {
+    const { data, error } = await client
+      .from('notes_pages')
+      .select('fichier, page, texte, mots')
+      .eq('note_id', noteId)
+      .order('fichier', { ascending: true })
+      .order('page', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+
   async function signalerNote(noteId, raison) {
     await assurerSession();
     const { error } = await client.from('signalements').insert({ note_id: noteId, raison });
@@ -113,6 +134,8 @@
     urlPublique,
     publierNote,
     supprimerNote,
+    publierPages,
+    chargerPages,
     signalerNote,
   };
 })();

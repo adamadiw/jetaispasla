@@ -29,8 +29,9 @@
   function routeActuelle() {
     const hash = location.hash.replace(/^#/, '') || '/';
     if (hash === '/publier') return { vue: 'publier' };
-    const m = hash.match(/^\/note\/([0-9a-f-]{36})$/i);
-    if (m) return { vue: 'note', id: m[1] };
+    // #/note/<id> ou #/note/<id>?q=<requête> (ouverture depuis une recherche)
+    const m = hash.match(/^\/note\/([0-9a-f-]{36})(?:\?(.*))?$/i);
+    if (m) return { vue: 'note', id: m[1], requete: new URLSearchParams(m[2] || '').get('q') || '' };
     return { vue: 'catalogue' };
   }
 
@@ -41,7 +42,12 @@
       if (lien.dataset.nav === route.vue) lien.setAttribute('aria-current', 'page');
       else lien.removeAttribute('aria-current');
     }
-    if (route.vue === 'note') afficherDetail(route.id);
+    if (route.vue !== 'note' && detailCourant) {
+      // Quitte la page de détail : libère les PDF ouverts.
+      if (detailCourant.visionneuse) detailCourant.visionneuse.detruire();
+      detailCourant = null;
+    }
+    if (route.vue === 'note') afficherDetail(route.id, route.requete);
     if (route.vue === 'catalogue') {
       document.title = "J'étais pas là — les notes du cours que tu as manqué";
       afficherCatalogue();
@@ -141,14 +147,14 @@
     return 'Photo';
   }
 
-  function carteNote({ note, termes }) {
+  function carteNote({ note, termes }, requete) {
     const image = premiereImage(note);
     const visuel = image
       ? el('img', { src: api.urlPublique(image.chemin), alt: '', loading: 'lazy', decoding: 'async' })
       : el('span', { class: 'fiche-format', text: libelleFormat(note.fichiers[0].type) });
     const nb = note.fichiers.length;
     return el('li', null,
-      el('a', { class: 'fiche', href: `#/note/${note.id}` },
+      el('a', { class: 'fiche', href: `#/note/${note.id}` + (requete ? `?q=${encodeURIComponent(requete)}` : '') },
         el('div', { class: 'fiche-visuel' }, visuel,
           nb > 1 ? el('span', { class: 'fiche-compte', text: `${nb} fichiers` }) : null),
         el('div', { class: 'fiche-corps' },
@@ -209,7 +215,7 @@
     statut.textContent = filtreActif
       ? `${resultats.length} note${resultats.length > 1 ? 's' : ''} trouvée${resultats.length > 1 ? 's' : ''}`
       : `${etat.notes.length} note${etat.notes.length > 1 ? 's' : ''} partagée${etat.notes.length > 1 ? 's' : ''}, les plus récentes d'abord`;
-    liste.append(...resultats.map(carteNote));
+    liste.append(...resultats.map((r) => carteNote(r, c.requete)));
   }
 
   async function chargerNotes() {
@@ -224,14 +230,55 @@
     }
     const route = routeActuelle();
     if (route.vue === 'catalogue') afficherCatalogue();
-    if (route.vue === 'note') afficherDetail(route.id);
+    if (route.vue === 'note') afficherDetail(route.id, route.requete);
   }
 
   // ------------------------------------------------------------------
   // Détail d'une note
   // ------------------------------------------------------------------
-  function afficherDetail(id) {
+  let detailCourant = null; // { id, visionneuse, actions }
+
+  function boutonsActions(note) {
+    const estAMoi = note.owner_id === api.utilisateurId();
+    return [
+      estAMoi ? el('button', { type: 'button', class: 'bouton bouton-marge', onclick: () => supprimer(note) }, 'Supprimer ma note') : null,
+      !estAMoi ? el('button', { type: 'button', class: 'bouton bouton-discret', onclick: () => ouvrirSignalement(note) }, 'Signaler') : null,
+    ].filter(Boolean);
+  }
+
+  function sectionTexte(note) {
+    const texte = note.texte_contenu || '';
+    const copier = el('button', {
+      type: 'button', class: 'bouton bouton-discret bouton-petit',
+      onclick: async () => {
+        try {
+          await navigator.clipboard.writeText(texte);
+          JPL.toast('Texte copié.');
+        } catch (_) {
+          JPL.toast('Copie impossible : sélectionne le texte et copie-le à la main.', 'erreur');
+        }
+      },
+    }, 'Copier le texte');
+    return el('details', { class: 'texte-extrait' },
+      el('summary', null, 'Texte extrait (pour copier-coller)'),
+      texte
+        ? [el('p', { class: 'aide', text: 'Lu automatiquement dans les fichiers, puis corrigé par l’auteur : il peut rester des erreurs. C’est ce texte qui permet de trouver la note.' }),
+          copier,
+          el('div', { class: 'texte-cahier', text: texte })]
+        : el('p', { class: 'etat', text: "Aucun texte n'a été extrait de cette note." }));
+  }
+
+  function afficherDetail(id, requete) {
     const conteneur = $('#detail-note');
+    // Même note et même recherche déjà affichées (ex. la session vient d'être
+    // créée) : on ne met à jour que les boutons, sans recharger la visionneuse.
+    if (detailCourant && detailCourant.cle === `${id}?${requete || ''}` && conteneur.contains(detailCourant.actions)) {
+      const note = etat.notes.find((n) => n.id === id);
+      if (note) detailCourant.actions.replaceChildren(...boutonsActions(note));
+      return;
+    }
+    if (detailCourant) detailCourant.visionneuse && detailCourant.visionneuse.detruire();
+    detailCourant = null;
     conteneur.replaceChildren();
     if (!etat.notesChargees) {
       conteneur.append(el('p', { class: 'etat', text: etat.erreurChargement ? JPL.messageErreur(etat.erreurChargement) : 'Chargement de la note…' }));
@@ -243,7 +290,6 @@
       return;
     }
     document.title = `${note.titre} — J'étais pas là`;
-    const estAMoi = note.owner_id === api.utilisateurId();
 
     const meta = el('dl', { class: 'detail-meta' },
       el('div', null, el('dt', { text: 'Matière' }), el('dd', { text: note.matiere })),
@@ -252,45 +298,58 @@
       el('div', null, el('dt', { text: 'Type' }), el('dd', { text: TYPES[note.type_document] || 'Autre' })),
       el('div', null, el('dt', { text: 'Publiée' }), el('dd', null, el('time', { datetime: note.created_at, text: JPL.formaterDate(note.created_at) }))));
 
-    const galerie = el('ul', { class: 'galerie' }, note.fichiers.map((f, i) => {
-      const url = api.urlPublique(f.chemin);
-      const estImage = f.type.startsWith('image/') && !/hei[cf]/.test(f.type);
-      if (estImage) {
-        return el('li', null, el('button', {
-          type: 'button', class: 'galerie-image',
-          'aria-label': `Agrandir l'image ${i + 1} sur ${note.fichiers.length}`,
-          onclick: () => ouvrirImage(url, `Page ${i + 1} de ${note.titre}`),
-        }, el('img', { src: url, alt: `Page ${i + 1} de ${note.titre}`, loading: 'lazy' })));
-      }
-      return el('li', null, el('a', { class: 'galerie-document', href: url, target: '_blank', rel: 'noopener', download: f.nom },
-        el('span', { class: 'fiche-format', text: libelleFormat(f.type) }),
-        el('span', { class: 'galerie-nom', text: f.nom })));
-    }));
-
-    const actions = el('div', { class: 'detail-actions' },
-      estAMoi ? el('button', { type: 'button', class: 'bouton bouton-marge', onclick: () => supprimer(note) }, 'Supprimer ma note') : null,
-      !estAMoi ? el('button', { type: 'button', class: 'bouton bouton-discret', onclick: () => ouvrirSignalement(note) }, 'Signaler') : null);
+    const zoneVisionneuse = el('div', { class: 'detail-visionneuse' });
+    const actions = el('div', { class: 'detail-actions' }, boutonsActions(note));
 
     // Note : Element.append() écrirait « null » en texte, d'où le filtre.
     conteneur.append(...[
       el('h1', { class: 'titre-page', text: note.titre }),
       meta,
       note.description ? el('p', { class: 'detail-description', text: note.description }) : null,
-      galerie,
-      el('section', { class: 'detail-texte', 'aria-labelledby': 'titre-texte' },
-        el('h2', { id: 'titre-texte', text: 'Texte de la note' }),
-        note.texte_contenu
-          ? el('div', { class: 'texte-cahier', text: note.texte_contenu })
-          : el('p', { class: 'etat', text: "Aucun texte n'a été extrait de cette note." })),
+      zoneVisionneuse,
+      sectionTexte(note),
       actions,
     ].filter(Boolean));
+
+    const cle = `${id}?${requete || ''}`;
+    detailCourant = { id, cle, visionneuse: null, actions };
+    ouvrirVisionneuse(note, requete || '', zoneVisionneuse, cle);
   }
 
-  function ouvrirImage(url, alt) {
-    const img = $('#image-agrandie');
-    img.src = url;
-    img.alt = alt;
-    $('#dialog-image').showModal();
+  // Depuis une recherche : ouvre la photo/page qui contient les mots et les désigne.
+  // Sans requête, ou si la localisation échoue : premier fichier, sans bandeau.
+  async function ouvrirVisionneuse(note, requete, zone, cle) {
+    const termes = requete ? JPL.localisation.termes(requete) : [];
+    let pages = [];
+    if (termes.length) {
+      try {
+        pages = await api.chargerPages(note.id);
+      } catch (err) {
+        console.warn('Pages non chargées (localisation indisponible) :', err);
+      }
+    }
+    if (!detailCourant || detailCourant.cle !== cle) return; // l'utilisateur est parti
+    const cible = JPL.localisation.meilleurePage(pages, termes);
+    const visionneuse = JPL.visionneuse.creer(zone, note, {
+      fichier: cible ? cible.fichier : 0,
+      page: cible ? cible.page : 0,
+      termes,
+      pages,
+    });
+    detailCourant.visionneuse = visionneuse;
+    if (cible) visionneuse.afficherBandeau(texteBandeau(note, cible));
+  }
+
+  function texteBandeau(note, cible) {
+    const fichier = note.fichiers[cible.fichier];
+    if (!fichier) return '';
+    const genre = JPL.visionneuse.genre(fichier);
+    if (genre === 'image') {
+      const rang = note.fichiers.slice(0, cible.fichier + 1).filter((f) => JPL.visionneuse.genre(f) === 'image').length;
+      return `Trouvé dans la photo ${rang}`;
+    }
+    if (genre === 'pdf') return `Trouvé page ${cible.page + 1} de ${fichier.nom}`;
+    return `Trouvé dans ${fichier.nom}`;
   }
 
   async function supprimer(note) {
@@ -334,6 +393,7 @@
   }
 
   function ajouterFichiers(liste) {
+    if (etat.publicationEnCours) return; // glisser-déposer pendant l'envoi : ignoré
     const refuses = [];
     for (const fichier of liste) {
       if (etat.fichiers.length >= MAX_FICHIERS) { refuses.push(`${fichier.name} : maximum ${MAX_FICHIERS} fichiers par note`); continue; }
@@ -375,7 +435,9 @@
           majEtatFichier(item, "Texte non lu : ce navigateur ne peut pas ouvrir cette image (fichier abîmé ou format HEIC). Saisis le texte toi-même.", 'avertissement');
           return;
         }
-        const texte = (await lecteur.lireTexte(item, (msg) => majEtatFichier(item, msg))).trim();
+        const resultat = await lecteur.lireTexte(item, (msg) => majEtatFichier(item, msg));
+        const texte = (resultat.texte || '').trim();
+        item.pages = resultat.pages || [];
         if (!etat.fichiers.includes(item)) return; // retiré entre-temps
         if (texte) {
           ajouterTexte(texte);
@@ -470,6 +532,21 @@
     if (champ) champ.focus();
   }
 
+  // Lignes notes_pages : `fichier` = rang du fichier dans la note (même ordre que l'envoi).
+  const MAX_TEXTE_PAGE = 200000;
+  const MAX_OCTETS_MOTS = 450000;
+  function lignesPages(items) {
+    const lignes = [];
+    items.forEach((item, fichier) => {
+      for (const p of item.pages || []) {
+        let mots = Array.isArray(p.mots) ? p.mots : [];
+        if (JSON.stringify(mots).length > MAX_OCTETS_MOTS) mots = []; // garde-fou de taille
+        lignes.push({ fichier, page: p.page, texte: JPL.sansNul(String(p.texte || '')).slice(0, MAX_TEXTE_PAGE), mots: JPL.sansNul(mots) });
+      }
+    });
+    return lignes;
+  }
+
   async function publier(evt) {
     evt.preventDefault();
     if (etat.publicationEnCours) return; // évite les doublons
@@ -485,17 +562,22 @@
     }
 
     const bouton = $('#bouton-publier');
+    const etapeFichiers = form.querySelector('fieldset.etape');
     etat.publicationEnCours = true;
     bouton.disabled = true;
+    etapeFichiers.disabled = true; // la liste de fichiers ne bouge plus pendant l'envoi
+    // Instantané : fichiers envoyés et pages enregistrées viennent de la même liste,
+    // dans le même ordre (sinon les pages pointeraient vers le mauvais fichier).
+    const items = etat.fichiers.slice();
     try {
       // Attendre la fin des lectures en cours pour ne pas perdre de texte.
-      const lectures = etat.fichiers.map((i) => i.lecture).filter(Boolean);
+      const lectures = items.map((i) => i.lecture).filter(Boolean);
       if (lectures.length) {
         bouton.textContent = 'Lecture du texte en cours…';
         await Promise.allSettled(lectures);
       }
       bouton.textContent = 'Préparation des fichiers…';
-      const prets = await Promise.all(etat.fichiers.map((i) => i.preparation));
+      const prets = await Promise.all(items.map((i) => i.preparation));
 
       await api.assurerSession();
       const meta = {
@@ -505,11 +587,18 @@
         cours: form.elements.cours.value.trim(),
         etablissement: form.elements.etablissement.value.trim(),
         description: form.elements.description.value.trim(),
-        texte_contenu: $('#champ-texte').value.trim(),
+        texte_contenu: JPL.sansNul($('#champ-texte').value).trim(),
       };
       const note = await api.publierNote(prets, meta, (i, total) => {
         bouton.textContent = i < total ? `Envoi des fichiers ${i + 1}/${total}…` : 'Enregistrement…';
       });
+      // Texte et mots par page, pour ouvrir un résultat de recherche au bon endroit.
+      // Un échec ici ne doit pas annuler la publication : la note reste cherchable.
+      try {
+        await api.publierPages(note.id, lignesPages(items));
+      } catch (err) {
+        console.warn('Pages non enregistrées (la localisation des résultats sera indisponible) :', err);
+      }
       etat.notes.unshift(note);
       if (JPL.recherche) JPL.recherche.ajouter(note);
       reinitialiserFormulaire();
@@ -520,6 +609,7 @@
       afficherErreurPublier(`La note n'a pas été publiée. ${JPL.messageErreur(err)}`);
     } finally {
       etat.publicationEnCours = false;
+      etapeFichiers.disabled = false;
       bouton.disabled = false;
       bouton.textContent = 'Publier la note';
     }
@@ -560,14 +650,13 @@
       ajouterFichiers(Array.from(e.dataTransfer.files));
     });
     $('#form-publier').addEventListener('submit', publier);
-    $('#dialog-image').addEventListener('click', (e) => { if (e.target.id === 'dialog-image') e.target.close(); });
 
     window.addEventListener('hashchange', afficherRoute);
     afficherRoute();
 
     // La session anonyme est créée en arrière-plan ; la lecture du catalogue n'en dépend pas.
     api.assurerSession()
-      .then(() => { if (routeActuelle().vue === 'note') afficherDetail(routeActuelle().id); })
+      .then(() => { const r = routeActuelle(); if (r.vue === 'note') afficherDetail(r.id, r.requete); })
       .catch((err) => {
         console.error(err);
         JPL.toast(`Publication indisponible. ${JPL.messageErreur(err)}`, 'erreur');

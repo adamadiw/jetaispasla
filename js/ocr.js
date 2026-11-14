@@ -71,6 +71,40 @@
       .trim();
   }
 
+  const arrondir = (n) => Math.round(n * 10000) / 10000;
+
+  // Mots reconnus -> [[x, y, largeur, hauteur, "mot"], …] en coordonnées 0–1
+  // relatives à l'image analysée (sert à désigner un mot trouvé par la recherche).
+  function boitesNormalisees(blocks, largeur, hauteur) {
+    const mots = [];
+    if (!Array.isArray(blocks) || !(largeur > 0) || !(hauteur > 0)) return mots;
+    for (const bloc of blocks) {
+      for (const paragraphe of (bloc && bloc.paragraphs) || []) {
+        for (const ligne of (paragraphe && paragraphe.lines) || []) {
+          for (const w of (ligne && ligne.words) || []) {
+            const texte = String((w && w.text) || '').trim();
+            const b = w && w.bbox;
+            if (!texte || !/[\p{L}\p{N}]/u.test(texte) || !b) continue;
+            mots.push([
+              arrondir(b.x0 / largeur), arrondir(b.y0 / hauteur),
+              arrondir((b.x1 - b.x0) / largeur), arrondir((b.y1 - b.y0) / hauteur),
+              texte,
+            ]);
+          }
+        }
+      }
+    }
+    return mots;
+  }
+
+  async function dimensions(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const d = { largeur: bitmap.width, hauteur: bitmap.height };
+    if (bitmap.close) bitmap.close();
+    return d;
+  }
+
+  // -> { texte, mots }
   async function reconnaitre(blob, surProgression) {
     rapporterProgression = surProgression;
     const worker = await obtenirWorker();
@@ -79,8 +113,14 @@
       minuteur = setTimeout(() => reject(new Error('La lecture du texte a pris trop de temps.')), DELAI_MAX_MS);
     });
     try {
-      const { data } = await Promise.race([worker.recognize(blob), delai]);
-      return nettoyer(data.text || '');
+      const [{ data }, taille] = await Promise.race([
+        Promise.all([worker.recognize(blob, {}, { text: true, blocks: true }), dimensions(blob)]),
+        delai,
+      ]);
+      return {
+        texte: nettoyer(data.text || ''),
+        mots: boitesNormalisees(data.blocks, taille.largeur, taille.hauteur),
+      };
     } catch (err) {
       await reinitialiser(); // repart d'un worker propre pour l'image suivante
       throw err;
@@ -90,16 +130,18 @@
     }
   }
 
-  // Interface attendue par app.js : lireTexte(item, surProgression) -> Promise<string>
+  // Interface commune des lecteurs (ocr.js, extraction.js) :
+  // lireTexte(item, surProgression) -> Promise<{ texte, pages: [{ page, texte, mots }] }>
   // Les images sont traitées une à la fois, dans l'ordre d'ajout.
   function lireTexte(item, surProgression) {
-    const travail = fileAttente.then(() => {
+    const travail = fileAttente.then(async () => {
       surProgression('Lecture du texte…');
-      return reconnaitre(item.pret.blob, surProgression);
+      const { texte, mots } = await reconnaitre(item.pret.blob, surProgression);
+      return { texte, pages: [{ page: 0, texte, mots }] };
     });
     fileAttente = travail.catch(() => {});
     return travail;
   }
 
-  JPL.ocr = { lireTexte, nettoyer };
+  JPL.ocr = { lireTexte, nettoyer, boitesNormalisees };
 })();

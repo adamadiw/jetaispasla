@@ -133,7 +133,45 @@ create policy "notes_fichiers_delete_proprio" on storage.objects
   );
 
 -- ---------------------------------------------------------------------
--- 4. Durcissement : fonction d'event trigger fournie par Supabase
+-- 4. Table notes_pages : texte et position des mots, par fichier et par page.
+--    Lue seulement sur la page d'une note (localisation d'un résultat de
+--    recherche) ; le catalogue n'en dépend pas.
+-- ---------------------------------------------------------------------
+create table if not exists public.notes_pages (
+  note_id uuid not null references public.notes (id) on delete cascade,
+  fichier smallint not null check (fichier between 0 and 9),
+  page    smallint not null check (page between 0 and 199),
+  texte   text not null default '' check (char_length(texte) <= 200000),
+  -- [[x, y, largeur, hauteur, "mot"], ...] — coordonnées normalisées 0–1
+  mots    jsonb not null default '[]'::jsonb check (
+            jsonb_typeof(mots) = 'array' and octet_length(mots::text) <= 500000),
+  primary key (note_id, fichier, page)
+);
+
+alter table public.notes_pages enable row level security;
+
+revoke all on public.notes_pages from anon, authenticated;
+grant select on public.notes_pages to anon, authenticated;
+grant insert on public.notes_pages to authenticated;
+
+drop policy if exists "notes_pages_select_tous"    on public.notes_pages;
+drop policy if exists "notes_pages_insert_proprio" on public.notes_pages;
+
+create policy "notes_pages_select_tous" on public.notes_pages
+  for select to anon, authenticated
+  using (true);
+
+-- Seul l'auteur de la note peut lui ajouter des pages. Pas de mise à jour ni
+-- de suppression directe : les pages disparaissent avec la note (cascade).
+create policy "notes_pages_insert_proprio" on public.notes_pages
+  for insert to authenticated
+  with check (exists (
+    select 1 from public.notes n
+    where n.id = note_id and n.owner_id = (select auth.uid())
+  ));
+
+-- ---------------------------------------------------------------------
+-- 5. Durcissement : fonction d'event trigger fournie par Supabase
 --    (active RLS automatiquement). Inutile de l'exposer via /rpc.
 -- ---------------------------------------------------------------------
 do $$
