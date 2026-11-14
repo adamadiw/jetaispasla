@@ -2,12 +2,14 @@
 // Note de test « Test T3 pages (à supprimer) » : fichier 0 = photo manuscrite
 // simulée (Socrate…), fichier 1 = biologie-mitose.pdf ; titre sans ces mots.
 async (page) => {
-  const BASE = 'http://127.0.0.1:8080/';
+  // Cible : serveur local par défaut ; globalThis.JPL_BASE (+ JPL_PARTAGE pour un aperçu Vercel protégé) sinon.
+  const BASE = globalThis.JPL_BASE || 'http://127.0.0.1:8080/';
   const ID = '10812299-9a49-4313-89ed-4ab4ee84477d';
   const ANCIENNE = '80802e27-e5f2-4871-93d1-991d573e7d93'; // sans notes_pages
   const DOCS = '77e00d58-d572-4e0b-b034-3f01e80dd39a';     // sans notes_pages, contient un .docx
   const ctx = await page.context().browser().newContext({ viewport: { width: 1280, height: 900 } });
   const p = await ctx.newPage();
+  if (globalThis.JPL_PARTAGE) await p.goto(globalThis.JPL_PARTAGE); // pose le cookie d'accès Vercel
   const erreurs = [];
   p.on('pageerror', (e) => erreurs.push(e.message));
   const verifs = [];

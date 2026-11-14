@@ -2,7 +2,8 @@
 // Lancer via l'outil Playwright « run code » avec ce fichier ; serveur local sur :8080.
 // Utilise des notes de test existantes (lecture seule).
 async (page) => {
-  const BASE = 'http://127.0.0.1:8080/';
+  // Cible : serveur local par défaut ; globalThis.JPL_BASE (+ JPL_PARTAGE pour un aperçu Vercel protégé) sinon.
+  const BASE = globalThis.JPL_BASE || 'http://127.0.0.1:8080/';
   const NOTES = {
     imageSansPages: '80802e27-e5f2-4871-93d1-991d573e7d93', // « Cours 4 — dialogue et questions »
     documents: '77e00d58-d572-4e0b-b034-3f01e80dd39a',     // « Test documents numériques » (pdf, pdf scanné, docx, md, txt)
@@ -10,6 +11,7 @@ async (page) => {
   };
   const ctx = await page.context().browser().newContext({ viewport: { width: 1280, height: 900 } });
   const p = await ctx.newPage();
+  if (globalThis.JPL_PARTAGE) await p.goto(globalThis.JPL_PARTAGE); // pose le cookie d'accès Vercel
   const erreurs = [];
   p.on('pageerror', (e) => erreurs.push(e.message));
   const verifs = [];
