@@ -61,6 +61,7 @@ js/ocr.js           OCR Tesseract.js (chargé à la demande)
 js/recherche.js     Index de recherche MiniSearch
 js/extraction.js    Texte des documents : PDF (pdf.js, OCR si scanné), DOCX (mammoth), MD, TXT
 js/app.js           Interface et navigation
+vendor/             supabase-js 2.119.0 servi depuis le site (voir ci-dessous)
 supabase/schema.sql Schéma, RLS et Storage
 samples/            Fichiers de test : photos (imprimé, manuscrit simulé), PDF numérique,
                     PDF scanné, DOCX, Markdown, texte
@@ -71,6 +72,10 @@ samples/            Fichiers de test : photos (imprimé, manuscrit simulé), PDF
 1. Publier une note avec `samples/manuscrit-simule.png` : le texte apparaît dans la zone modifiable après quelques secondes.
 2. Dans une fenêtre de navigation privée (autre utilisateur), chercher `socrat`, `sokrate` ou `maieutique` : la note est trouvée et le mot est surligné.
 3. Publier les fichiers `samples/*.pdf`, `.docx`, `.md`, `.txt` puis chercher `telophase`, `lesage`, `inertie`.
+
+## Pourquoi supabase-js est dans `vendor/`
+
+Certaines extensions de confidentialité (ex. **LocalCDN** pour Firefox) interceptent les requêtes vers jsDelivr et servent leur propre copie de supabase-js, la **2.39.3**, quelle que soit la version demandée. Cette version ne contient pas `signInAnonymously` : la publication devenait impossible (« client.auth.signInAnonymously is not a function »). Servir le fichier depuis le site lui-même évite toute substitution. Pour mettre à jour : télécharger `dist/umd/supabase.js` de la nouvelle version dans `vendor/`, puis mettre à jour le nom du fichier et le hash `integrity` dans `index.html`.
 
 ## Limites connues
 

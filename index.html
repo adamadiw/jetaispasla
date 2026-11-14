@@ -151,9 +151,12 @@
 
   <noscript><p class="erreur">Ce site a besoin de JavaScript pour fonctionner.</p></noscript>
 
-  <!-- Bibliothèques (CDN, versions figées) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"
-          integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous"></script>
+  <!-- supabase-js est servi depuis le site lui-même : des extensions comme LocalCDN
+       remplacent le fichier jsDelivr par leur copie 2.39.3, sans signInAnonymously. -->
+  <script src="vendor/supabase-js-2.119.0.js"
+          integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O"></script>
+  <!-- Autres bibliothèques (CDN, versions figées) -->
+
   <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js"
           integrity="sha384-9Eacb80ywplqCp0P/bR61+zYn5Pg2LmQ7T8rppdoKHcQMmXbRh1wHwRC8avUJvnz" crossorigin="anonymous"></script>
 
