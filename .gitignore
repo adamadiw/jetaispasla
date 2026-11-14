@@ -1,0 +1,14 @@
+# Artefacts de test du navigateur automatisé
+.playwright-mcp/
+
+# Vercel CLI
+.vercel/
+
+# Système
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Ne jamais committer de secrets
+.env
+.env.*

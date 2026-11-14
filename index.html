@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>J'étais pas là — les notes du cours que tu as manqué</title>
+  <meta name="description" content="Retrouve les notes de cours partagées par d'autres étudiants du cégep et de l'université, en cherchant directement dans leur contenu.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%23fbfcfe'/%3E%3Cpath d='M0 11h32M0 18h32M0 25h32' stroke='%23c9d8ef' stroke-width='1.5'/%3E%3Cpath d='M8 0v32' stroke='%23d7383f' stroke-width='2'/%3E%3Ctext x='12' y='24' font-family='Arial' font-weight='700' font-size='20' fill='%231e3a8a'%3EJ%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="lien-evitement" href="#contenu">Aller au contenu</a>
+
+  <header class="entete">
+    <a class="logo" href="#/">J'étais pas là</a>
+    <nav class="nav" aria-label="Navigation principale">
+      <a href="#/" data-nav="catalogue">Chercher</a>
+      <a href="#/publier" class="bouton bouton-encre" data-nav="publier">Publier une note</a>
+    </nav>
+  </header>
+
+  <main id="contenu" tabindex="-1">
+
+    <!-- ============ Catalogue + recherche ============ -->
+    <section id="vue-catalogue" class="vue" aria-labelledby="titre-catalogue">
+      <div class="cahier">
+        <h1 id="titre-catalogue" class="titre-cahier">Qu'est-ce que tu as manqué&nbsp;?</h1>
+        <form class="recherche" role="search" onsubmit="return false">
+          <label for="champ-recherche" class="visuellement-cache">Rechercher dans les notes</label>
+          <input id="champ-recherche" type="search" autocomplete="off" spellcheck="false"
+                 placeholder="Socrate, dérivées, mitose…">
+        </form>
+        <div class="filtres">
+          <label>
+            <span>Matière</span>
+            <select id="filtre-matiere"><option value="">Toutes</option></select>
+          </label>
+          <label>
+            <span>Type</span>
+            <select id="filtre-type"><option value="">Tous</option></select>
+          </label>
+        </div>
+      </div>
+
+      <p id="etat-catalogue" class="etat" role="status" aria-live="polite">Chargement des notes…</p>
+      <ul id="liste-notes" class="grille-fiches"></ul>
+      <div id="vide-catalogue" class="vide" hidden>
+        <p id="vide-message"></p>
+        <a href="#/publier" class="bouton bouton-encre">Publier une note</a>
+      </div>
+    </section>
+
+    <!-- ============ Publication ============ -->
+    <section id="vue-publier" class="vue" aria-labelledby="titre-publier" hidden>
+      <h1 id="titre-publier" class="titre-page">Publier une note</h1>
+
+      <form id="form-publier" class="formulaire" novalidate>
+        <fieldset class="etape">
+          <legend><span class="numero" aria-hidden="true">1</span> Tes fichiers</legend>
+          <p class="aide" id="aide-fichiers">Photos de tes notes (JPEG, PNG, WebP, HEIC). Jusqu'à 10 fichiers, 10&nbsp;Mo chacun.</p>
+          <label class="depot" for="champ-fichiers">
+            <span class="depot-titre">Choisir des fichiers</span>
+            <span class="depot-sous-titre">ou les glisser ici</span>
+            <input id="champ-fichiers" type="file" multiple aria-describedby="aide-fichiers">
+          </label>
+          <ul id="liste-fichiers" class="liste-fichiers"></ul>
+        </fieldset>
+
+        <fieldset class="etape">
+          <legend><span class="numero" aria-hidden="true">2</span> Le texte de tes notes</legend>
+          <p class="aide">Le texte est lu automatiquement dans tes fichiers. Corrige-le ou complète-le : c'est lui qui permet aux autres de trouver ta note.</p>
+          <p id="etat-analyse" class="etat-analyse" role="status" aria-live="polite" hidden></p>
+          <label for="champ-texte" class="visuellement-cache">Texte de la note</label>
+          <textarea id="champ-texte" rows="9" maxlength="100000"
+                    placeholder="Le texte lu dans tes fichiers apparaîtra ici."></textarea>
+          <p class="astuce">Écriture manuscrite&nbsp;? Copie le texte avec Live Text (iPhone) ou Google Lens (Android) et colle-le ici.</p>
+        </fieldset>
+
+        <fieldset class="etape">
+          <legend><span class="numero" aria-hidden="true">3</span> Les infos du cours</legend>
+          <div class="champs">
+            <label class="champ champ-large">
+              <span>Titre <abbr title="obligatoire">*</abbr></span>
+              <input name="titre" required maxlength="150" placeholder="Ex. : Socrate et la maïeutique">
+            </label>
+            <label class="champ">
+              <span>Matière <abbr title="obligatoire">*</abbr></span>
+              <select name="matiere" required><option value="">Choisir…</option></select>
+            </label>
+            <label class="champ">
+              <span>Type de document <abbr title="obligatoire">*</abbr></span>
+              <select name="type_document" required><option value="">Choisir…</option></select>
+            </label>
+            <label class="champ">
+              <span>Cours</span>
+              <input name="cours" maxlength="80" placeholder="Ex. : PHI-101">
+            </label>
+            <label class="champ">
+              <span>Établissement</span>
+              <input name="etablissement" maxlength="120" placeholder="Ex. : Cégep du Vieux Montréal">
+            </label>
+            <label class="champ champ-large">
+              <span>Description</span>
+              <textarea name="description" rows="3" maxlength="2000"
+                        placeholder="Quel cours, quelle semaine, ce qui est couvert…"></textarea>
+            </label>
+          </div>
+        </fieldset>
+
+        <p class="rappel">Publie seulement tes propres notes, ou des documents que tu as le droit de partager. Pas de renseignements personnels (noms, numéros, adresses).</p>
+
+        <p id="erreur-publier" class="erreur" role="alert" hidden></p>
+        <div class="actions-formulaire">
+          <button id="bouton-publier" type="submit" class="bouton bouton-encre bouton-grand">Publier la note</button>
+          <a href="#/" class="bouton bouton-discret">Annuler</a>
+        </div>
+      </form>
+    </section>
+
+    <!-- ============ Détail d'une note ============ -->
+    <section id="vue-note" class="vue" aria-live="polite" hidden>
+      <a href="#/" class="retour">Retour aux notes</a>
+      <article id="detail-note" class="detail"></article>
+    </section>
+  </main>
+
+  <!-- Signalement -->
+  <dialog id="dialog-signaler" aria-labelledby="titre-signaler">
+    <form method="dialog" id="form-signaler">
+      <h2 id="titre-signaler">Signaler cette note</h2>
+      <label for="champ-raison">Quel est le problème&nbsp;?</label>
+      <textarea id="champ-raison" rows="4" maxlength="500" required
+                placeholder="Contenu inapproprié, renseignements personnels, document non autorisé…"></textarea>
+      <div class="actions-formulaire">
+        <button type="submit" value="envoyer" class="bouton bouton-marge">Envoyer le signalement</button>
+        <button type="submit" value="annuler" formnovalidate class="bouton bouton-discret">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Visionneuse plein écran -->
+  <dialog id="dialog-image" class="visionneuse" aria-label="Image agrandie">
+    <form method="dialog"><button class="bouton bouton-discret fermer" value="fermer">Fermer</button></form>
+    <img id="image-agrandie" alt="">
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <noscript><p class="erreur">Ce site a besoin de JavaScript pour fonctionner.</p></noscript>
+
+  <!-- Bibliothèques (CDN, versions figées) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.0/dist/umd/supabase.js"
+          integrity="sha384-uteMfOloLDGt042uDz+xHGF3ym63/WQ6rFq7murQRG8Ih7QrXGEGNtWd8688sb4O" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/minisearch@7.2.0/dist/umd/index.min.js"
+          integrity="sha384-9Eacb80ywplqCp0P/bR61+zYn5Pg2LmQ7T8rppdoKHcQMmXbRh1wHwRC8avUJvnz" crossorigin="anonymous"></script>
+
+  <!-- Application -->
+  <script src="config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/images.js"></script>
+  <script src="js/ocr.js"></script>
+  <script src="js/recherche.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

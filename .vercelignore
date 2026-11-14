@@ -1,0 +1,6 @@
+# Fichiers du dépôt qui n'ont pas à être servis sur le site public
+PRD_*.md
+README.md
+supabase/
+samples/
+.playwright-mcp/
