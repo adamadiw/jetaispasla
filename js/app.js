@@ -29,8 +29,9 @@
   function routeActuelle() {
     const hash = location.hash.replace(/^#/, '') || '/';
     if (hash === '/publier') return { vue: 'publier' };
-    const m = hash.match(/^\/note\/([0-9a-f-]{36})$/i);
-    if (m) return { vue: 'note', id: m[1] };
+    // #/note/<id> ou #/note/<id>?q=<requête> (ouverture depuis une recherche)
+    const m = hash.match(/^\/note\/([0-9a-f-]{36})(?:\?(.*))?$/i);
+    if (m) return { vue: 'note', id: m[1], requete: new URLSearchParams(m[2] || '').get('q') || '' };
     return { vue: 'catalogue' };
   }
 
@@ -46,7 +47,7 @@
       if (detailCourant.visionneuse) detailCourant.visionneuse.detruire();
       detailCourant = null;
     }
-    if (route.vue === 'note') afficherDetail(route.id);
+    if (route.vue === 'note') afficherDetail(route.id, route.requete);
     if (route.vue === 'catalogue') {
       document.title = "J'étais pas là — les notes du cours que tu as manqué";
       afficherCatalogue();
@@ -146,14 +147,14 @@
     return 'Photo';
   }
 
-  function carteNote({ note, termes }) {
+  function carteNote({ note, termes }, requete) {
     const image = premiereImage(note);
     const visuel = image
       ? el('img', { src: api.urlPublique(image.chemin), alt: '', loading: 'lazy', decoding: 'async' })
       : el('span', { class: 'fiche-format', text: libelleFormat(note.fichiers[0].type) });
     const nb = note.fichiers.length;
     return el('li', null,
-      el('a', { class: 'fiche', href: `#/note/${note.id}` },
+      el('a', { class: 'fiche', href: `#/note/${note.id}` + (requete ? `?q=${encodeURIComponent(requete)}` : '') },
         el('div', { class: 'fiche-visuel' }, visuel,
           nb > 1 ? el('span', { class: 'fiche-compte', text: `${nb} fichiers` }) : null),
         el('div', { class: 'fiche-corps' },
@@ -214,7 +215,7 @@
     statut.textContent = filtreActif
       ? `${resultats.length} note${resultats.length > 1 ? 's' : ''} trouvée${resultats.length > 1 ? 's' : ''}`
       : `${etat.notes.length} note${etat.notes.length > 1 ? 's' : ''} partagée${etat.notes.length > 1 ? 's' : ''}, les plus récentes d'abord`;
-    liste.append(...resultats.map(carteNote));
+    liste.append(...resultats.map((r) => carteNote(r, c.requete)));
   }
 
   async function chargerNotes() {
@@ -229,7 +230,7 @@
     }
     const route = routeActuelle();
     if (route.vue === 'catalogue') afficherCatalogue();
-    if (route.vue === 'note') afficherDetail(route.id);
+    if (route.vue === 'note') afficherDetail(route.id, route.requete);
   }
 
   // ------------------------------------------------------------------
@@ -267,11 +268,11 @@
         : el('p', { class: 'etat', text: "Aucun texte n'a été extrait de cette note." }));
   }
 
-  function afficherDetail(id) {
+  function afficherDetail(id, requete) {
     const conteneur = $('#detail-note');
-    // Même note déjà affichée (ex. la session vient d'être créée) : on ne met à
-    // jour que les boutons, sans recharger la visionneuse.
-    if (detailCourant && detailCourant.id === id && conteneur.contains(detailCourant.actions)) {
+    // Même note et même recherche déjà affichées (ex. la session vient d'être
+    // créée) : on ne met à jour que les boutons, sans recharger la visionneuse.
+    if (detailCourant && detailCourant.cle === `${id}?${requete || ''}` && conteneur.contains(detailCourant.actions)) {
       const note = etat.notes.find((n) => n.id === id);
       if (note) detailCourant.actions.replaceChildren(...boutonsActions(note));
       return;
@@ -310,8 +311,45 @@
       actions,
     ].filter(Boolean));
 
-    const visionneuse = JPL.visionneuse.creer(zoneVisionneuse, note);
-    detailCourant = { id, visionneuse, actions };
+    const cle = `${id}?${requete || ''}`;
+    detailCourant = { id, cle, visionneuse: null, actions };
+    ouvrirVisionneuse(note, requete || '', zoneVisionneuse, cle);
+  }
+
+  // Depuis une recherche : ouvre la photo/page qui contient les mots et les désigne.
+  // Sans requête, ou si la localisation échoue : premier fichier, sans bandeau.
+  async function ouvrirVisionneuse(note, requete, zone, cle) {
+    const termes = requete ? JPL.localisation.termes(requete) : [];
+    let pages = [];
+    if (termes.length) {
+      try {
+        pages = await api.chargerPages(note.id);
+      } catch (err) {
+        console.warn('Pages non chargées (localisation indisponible) :', err);
+      }
+    }
+    if (!detailCourant || detailCourant.cle !== cle) return; // l'utilisateur est parti
+    const cible = JPL.localisation.meilleurePage(pages, termes);
+    const visionneuse = JPL.visionneuse.creer(zone, note, {
+      fichier: cible ? cible.fichier : 0,
+      page: cible ? cible.page : 0,
+      termes,
+      pages,
+    });
+    detailCourant.visionneuse = visionneuse;
+    if (cible) visionneuse.afficherBandeau(texteBandeau(note, cible));
+  }
+
+  function texteBandeau(note, cible) {
+    const fichier = note.fichiers[cible.fichier];
+    if (!fichier) return '';
+    const genre = JPL.visionneuse.genre(fichier);
+    if (genre === 'image') {
+      const rang = note.fichiers.slice(0, cible.fichier + 1).filter((f) => JPL.visionneuse.genre(f) === 'image').length;
+      return `Trouvé dans la photo ${rang}`;
+    }
+    if (genre === 'pdf') return `Trouvé page ${cible.page + 1} de ${fichier.nom}`;
+    return `Trouvé dans ${fichier.nom}`;
   }
 
   async function supprimer(note) {
@@ -611,7 +649,7 @@
 
     // La session anonyme est créée en arrière-plan ; la lecture du catalogue n'en dépend pas.
     api.assurerSession()
-      .then(() => { if (routeActuelle().vue === 'note') afficherDetail(routeActuelle().id); })
+      .then(() => { const r = routeActuelle(); if (r.vue === 'note') afficherDetail(r.id, r.requete); })
       .catch((err) => {
         console.error(err);
         JPL.toast(`Publication indisponible. ${JPL.messageErreur(err)}`, 'erreur');

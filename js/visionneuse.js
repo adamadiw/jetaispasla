@@ -128,9 +128,73 @@
       if (jeton !== etat.jeton) return;
       // Plein écran possible seulement quand quelque chose est affiché.
       boutonPleinEcran.disabled = !elementCourant;
-      if (typeof opts.apresAffichage === 'function') {
-        opts.apresAffichage({ fichier: etat.fichier, page: etat.page, genre: g, scene, element: elementCourant, calque: scene.querySelector('.vision-calque') });
+      try {
+        await designerMots(g, jeton);
+      } catch (err) {
+        console.warn('Mots non désignés :', err); // l'affichage reste utilisable
       }
+    }
+
+    // ----------------------------------------------------------------
+    // Désigner les mots cherchés dans la vue affichée (si la note a été
+    // ouverte depuis une recherche).
+    const pourcent = (v) => `${(v * 100).toFixed(3)}%`;
+
+    async function designerMots(g, jeton) {
+      const termes = opts.termes || [];
+      if (!termes.length || !elementCourant) return;
+      if (g === 'image' || g === 'pdf') {
+        const ligne = (opts.pages || []).find((l) => l.fichier === etat.fichier && l.page === (g === 'pdf' ? etat.page : 0));
+        let boites = [];
+        if (ligne && Array.isArray(ligne.mots) && ligne.mots.length) {
+          boites = JPL.localisation.boitesCorrespondantes(ligne.mots, termes); // photo ou PDF scanné (OCR)
+        } else if (g === 'pdf' && elementCourant.pdf) {
+          boites = await boitesPdfNumerique(elementCourant, termes);
+        }
+        const calque = scene.querySelector('.vision-calque');
+        if (jeton !== etat.jeton || !calque) return;
+        calque.replaceChildren(...boites.map(([x, y, l, h]) => el('div', {
+          class: 'cadre-mot',
+          style: `left:${pourcent(x)};top:${pourcent(y)};width:${pourcent(l)};height:${pourcent(h)}`,
+        })));
+      } else {
+        const premier = JPL.rendu.surligner(elementCourant, termes);
+        if (premier) premier.scrollIntoView({ block: 'center' });
+      }
+    }
+
+    // Position d'un mot dans une ligne de texte : proportion de la largeur mesurée
+    // (plus juste qu'un simple compte de caractères, les lettres n'ayant pas la même largeur).
+    const mesureur = document.createElement('canvas').getContext('2d');
+    mesureur.font = '100px Arial, Helvetica, sans-serif';
+    const proportion = (str, n) => (n <= 0 ? 0 : mesureur.measureText(str.slice(0, n)).width / (mesureur.measureText(str).width || 1));
+
+    // PDF numérique : position des mots depuis le texte de la page (pdf.js).
+    async function boitesPdfNumerique(canvas, termes) {
+      const { page, viewport } = canvas.pdf;
+      const contenu = await page.getTextContent();
+      const boites = [];
+      for (const item of contenu.items) {
+        const str = item.str || '';
+        if (!str.trim() || !item.transform || !item.width) continue;
+        const motif = /[\p{L}\p{N}]+/gu;
+        let m;
+        while ((m = motif.exec(str))) {
+          if (!termes.some((t) => JPL.localisation.correspond(m[0], t))) continue;
+          const [, , c, d, e, f] = item.transform;
+          const hauteur = item.height || Math.hypot(c, d);
+          const debut = e + item.width * proportion(str, m.index);
+          const fin = e + item.width * proportion(str, m.index + m[0].length);
+          // pdf.js 6 n'a plus convertToViewportRectangle : on convertit les deux coins.
+          const [x1, y1] = viewport.convertToViewportPoint(debut, f - hauteur * 0.25);
+          const [x2, y2] = viewport.convertToViewportPoint(fin, f + hauteur * 0.95);
+          boites.push([
+            Math.min(x1, x2) / canvas.width, Math.min(y1, y2) / canvas.height,
+            Math.abs(x2 - x1) / canvas.width, Math.abs(y2 - y1) / canvas.height,
+          ].map(JPL.localisation.borner));
+        }
+      }
+      return boites;
     }
 
     function afficherImage(url, fichier, jeton) {
